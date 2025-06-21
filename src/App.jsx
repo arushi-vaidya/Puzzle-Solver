@@ -1,6 +1,6 @@
 //npm run dev
 import React, { useState, useEffect } from 'react';
-import { Play, Pause, RotateCcw, Settings, Crown, Grid3X3 } from 'lucide-react';
+import { Play, Pause, RotateCcw, Settings, Crown, ChevronLeft, ChevronRight } from 'lucide-react';
 
 const PuzzleSolver = () => {
   const [activeTab, setActiveTab] = useState('nqueens');
@@ -10,7 +10,8 @@ const PuzzleSolver = () => {
   // N-Queens State
   const [boardSize, setBoardSize] = useState(8);
   const [queensBoard, setQueensBoard] = useState([]);
-  const [queensSolution, setQueensSolution] = useState([]);
+  const [queensSolutions, setQueensSolutions] = useState([]);
+  const [currentSolutionIndex, setCurrentSolutionIndex] = useState(0);
   const [queensSteps, setQueensSteps] = useState(0);
   const [queensBacktracks, setQueensBacktracks] = useState(0);
   
@@ -31,7 +32,8 @@ const PuzzleSolver = () => {
   const initializeNQueens = () => {
     const board = Array(boardSize).fill().map(() => Array(boardSize).fill(0));
     setQueensBoard(board);
-    setQueensSolution([]);
+    setQueensSolutions([]);
+    setCurrentSolutionIndex(0);
     setQueensSteps(0);
     setQueensBacktracks(0);
   };
@@ -172,9 +174,11 @@ const PuzzleSolver = () => {
     return true;
   };
 
-  const solveNQueensBacktrack = async (board, row, solution, onUpdate) => {
+  const solveNQueensBacktrack = async (board, row, solution, solutions, onUpdate) => {
     if (row === board.length) {
-      return [...solution];
+      // Found a complete solution, add it to solutions array
+      solutions.push([...solution]);
+      return; // Continue searching for more solutions
     }
     
     for (let col = 0; col < board.length; col++) {
@@ -190,8 +194,7 @@ const PuzzleSolver = () => {
         }
         
         // Recursive call
-        const result = await solveNQueensBacktrack(board, row + 1, solution, onUpdate);
-        if (result) return result;
+        await solveNQueensBacktrack(board, row + 1, solution, solutions, onUpdate);
         
         // Backtrack
         board[row][col] = 0;
@@ -204,8 +207,57 @@ const PuzzleSolver = () => {
         }
       }
     }
+  };
+
+  const solveNQueens = async () => {
+    if (isAnimating) return;
     
-    return null;
+    setIsAnimating(true);
+    initializeNQueens();
+    
+    const board = Array(boardSize).fill().map(() => Array(boardSize).fill(0));
+    const solution = [];
+    const solutions = [];
+    
+    const onUpdate = (newBoard, newSolution) => {
+      setQueensBoard(newBoard.map(row => [...row]));
+    };
+    
+    await solveNQueensBacktrack(board, 0, solution, solutions, onUpdate);
+    
+    setQueensSolutions(solutions);
+    setCurrentSolutionIndex(0);
+    
+    // Display first solution if any found
+    if (solutions.length > 0) {
+      displaySolution(solutions[0]);
+    }
+    
+    setIsAnimating(false);
+  };
+
+  const displaySolution = (solution) => {
+    const board = Array(boardSize).fill().map(() => Array(boardSize).fill(0));
+    solution.forEach(([row, col]) => {
+      board[row][col] = 1;
+    });
+    setQueensBoard(board);
+  };
+
+  const nextSolution = () => {
+    if (queensSolutions.length > 0) {
+      const newIndex = (currentSolutionIndex + 1) % queensSolutions.length;
+      setCurrentSolutionIndex(newIndex);
+      displaySolution(queensSolutions[newIndex]);
+    }
+  };
+
+  const prevSolution = () => {
+    if (queensSolutions.length > 0) {
+      const newIndex = currentSolutionIndex === 0 ? queensSolutions.length - 1 : currentSolutionIndex - 1;
+      setCurrentSolutionIndex(newIndex);
+      displaySolution(queensSolutions[newIndex]);
+    }
   };
 
   // Sudoku Algorithm
@@ -265,29 +317,6 @@ const PuzzleSolver = () => {
       }
     }
     return true;
-  };
-
-  const solveNQueens = async () => {
-    if (isAnimating) return;
-    
-    setIsAnimating(true);
-    initializeNQueens();
-    
-    const board = Array(boardSize).fill().map(() => Array(boardSize).fill(0));
-    const solution = [];
-    
-    const onUpdate = (newBoard, newSolution) => {
-      setQueensBoard(newBoard.map(row => [...row]));
-      setQueensSolution([...newSolution]);
-    };
-    
-    const result = await solveNQueensBacktrack(board, 0, solution, onUpdate);
-    
-    if (result) {
-      setQueensSolution(result);
-    }
-    
-    setIsAnimating(false);
   };
 
   const solveSudoku = async () => {
@@ -394,7 +423,11 @@ const PuzzleSolver = () => {
                 : 'text-gray-600 hover:text-gray-800'
             }`}
           >
-            <Grid3X3 size={20} />
+            <div className="w-5 h-5 grid grid-cols-3 gap-px">
+              {[...Array(9)].map((_, i) => (
+                <div key={i} className="bg-current w-1 h-1 rounded-sm"></div>
+              ))}
+            </div>
             Sudoku Solver
           </button>
         </div>
@@ -444,7 +477,7 @@ const PuzzleSolver = () => {
                 className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
               >
                 {isAnimating ? <Pause size={16} /> : <Play size={16} />}
-                {isAnimating ? 'Solving...' : 'Solve'}
+                {isAnimating ? 'Finding All Solutions...' : 'Find All Solutions'}
               </button>
               
               <button
@@ -456,6 +489,38 @@ const PuzzleSolver = () => {
                 Reset
               </button>
             </div>
+
+            {/* Solution Navigation */}
+            {queensSolutions.length > 0 && (
+              <div className="flex justify-center items-center gap-4 mb-6 bg-white p-4 rounded-lg shadow-sm">
+                <button
+                  onClick={prevSolution}
+                  disabled={isAnimating || queensSolutions.length <= 1}
+                  className="px-3 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-2"
+                >
+                  <ChevronLeft size={16} />
+                  Previous
+                </button>
+                
+                <div className="text-center">
+                  <div className="text-lg font-bold text-gray-800">
+                    Solution {currentSolutionIndex + 1} of {queensSolutions.length}
+                  </div>
+                  <div className="text-sm text-gray-600">
+                    {queensSolutions.length === 1 ? '1 solution found' : `${queensSolutions.length} solutions found`}
+                  </div>
+                </div>
+                
+                <button
+                  onClick={nextSolution}
+                  disabled={isAnimating || queensSolutions.length <= 1}
+                  className="px-3 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-2"
+                >
+                  Next
+                  <ChevronRight size={16} />
+                </button>
+              </div>
+            )}
 
             {/* Board and Stats */}
             <div className="flex flex-col lg:flex-row items-center gap-8">
@@ -475,17 +540,23 @@ const PuzzleSolver = () => {
                     <span className="font-mono">{queensBacktracks}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span>Queens placed:</span>
-                    <span className="font-mono">{queensSolution.length}</span>
+                    <span>Total solutions:</span>
+                    <span className="font-mono">{queensSolutions.length}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Current solution:</span>
+                    <span className="font-mono">
+                      {queensSolutions.length > 0 ? `${currentSolutionIndex + 1}/${queensSolutions.length}` : 'None'}
+                    </span>
                   </div>
                   <div className="flex justify-between">
                     <span>Status:</span>
                     <span className={`font-medium ${
-                      queensSolution.length === boardSize ? 'text-green-600' : 
+                      queensSolutions.length > 0 ? 'text-green-600' : 
                       isAnimating ? 'text-blue-600' : 'text-gray-600'
                     }`}>
-                      {queensSolution.length === boardSize ? 'Solved!' : 
-                       isAnimating ? 'Solving...' : 'Ready'}
+                      {queensSolutions.length > 0 ? 'Complete!' : 
+                       isAnimating ? 'Searching...' : 'Ready'}
                     </span>
                   </div>
                 </div>
@@ -495,7 +566,7 @@ const PuzzleSolver = () => {
         </div>
       )}
 
-      {/* Sudoku Tab */}
+    {/* Sudoku Tab */}
       {activeTab === 'sudoku' && (
         <div className="space-y-8">
           <div className="bg-gradient-to-br from-blue-50 to-indigo-100 p-8 rounded-2xl shadow-lg">
